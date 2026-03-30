@@ -2,14 +2,12 @@ import os
 
 class Config:
     # 底座模型配置（本地模型）
-    BASE_URL = "http://202.115.141.46:8080/v1"
+    BASE_URL = ""
     API_KEY = os.environ.get("LOCAL_MODEL_API_KEY", "")
     MODEL_NAME = "MiniMax-M2.5"
 
     # 硅基流动API密钥（用于语音合成）
     SILICONFLOW_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "")
-    #MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
-    #MODEL_NAME = "Qwen/Qwen3.5-4B"
     MAX_TOKENS = 1000
     TEMPERATURE = 0.7  
     
