@@ -15,6 +15,13 @@ data/chroma_db/
 # Audio files
 audio_files/
 
+# Sensitive data files
+user_auth.json
+memory_store*.json
+vector_db.json
+genshin_complete_graph*.json
+knowledge_base_chunks.json
+
 # Logs
 *.log
 logs/
