@@ -1,0 +1,12 @@
+# 死域扩散加重
+
+大量死域力量渗透到现实雨林中，蕈兽开始受刺激开始第二次大规模泛滥。植物无论种类还是数量都在迅速减少[30]。
+
+## 元数据信息
+- ID: region_sumeru_child_085
+- 来源: 须弥 - 原神WIKI_BWIKI_哔哩哔哩.html
+- 来源文件: 须弥 - 原神WIKI_BWIKI_哔哩哔哩.html
+- 页面类型: region_sumeru
+- 内容类型: child_block
+- 章节标题: 死域扩散加重
+- 父块ID: region_sumeru_parent_001

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>控制台测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .console { background: #000; color: #0f0; padding: 10px; font-family: monospace; height: 300px; overflow-y: auto; margin-top: 20px; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>登录按钮测试</h1>
+    <input type="password" id="password" placeholder="输入口令">
+    <button id="loginBtn">登录</button>
+    <button onclick="testLoginButton()">测试登录按钮</button>
+    <button onclick="testLoginFunction()">测试登录函数</button>
+    <div class="console" id="console"></div>
+
+    <script>
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('loginBtn');
+        const consoleDiv = document.getElementById('console');
+        
+        function log(msg) {
+            consoleDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + msg + '<br>';
+            console.log(msg);
+        }
+        
+        log('页面加载完成');
+        log('loginBtn:', loginBtn);
+        log('passwordInput:', passwordInput);
+        
+        // 登录函数
+        async function login(password) {
+            log('开始登录函数，密码:', password);
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: password })
+                });
+                log('响应状态:', response.status);
+                const data = await response.json();
+                log('响应数据:', JSON.stringify(data));
+                return data.success;
+            } catch (error) {
+                log('错误:', error);
+                return false;
+            }
+        }
+        
+        // 测试登录按钮
+        function testLoginButton() {
+            log('测试登录按钮');
+            if (loginBtn) {
+                log('登录按钮存在');
+                log('按钮disabled:', loginBtn.disabled);
+                log('按钮样式:', window.getComputedStyle(loginBtn));
+                log('按钮事件监听器数量:', getEventListeners(loginBtn).click ? getEventListeners(loginBtn).click.length : 0);
+            } else {
+                log('登录按钮不存在');
+            }
+        }
+        
+        // 测试登录函数
+        async function testLoginFunction() {
+            log('测试登录函数');
+            const password = passwordInput.value.trim();
+            if (!password) {
+                log('请输入密码');
+                return;
+            }
+            const result = await login(password);
+            log('登录结果:', result ? '成功' : '失败');
+        }
+        
+        // 绑定登录按钮点击事件
+        loginBtn.addEventListener('click', async function() {
+            log('登录按钮被点击');
+            const password = passwordInput.value.trim();
+            if (!password) {
+                log('请输入口令');
+                return;
+            }
+            const result = await login(password);
+            log('登录结果:', result ? '成功' : '失败');
+        });
+    </script>
+</body>
+</html>

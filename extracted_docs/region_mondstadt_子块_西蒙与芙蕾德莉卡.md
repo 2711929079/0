@@ -1,0 +1,12 @@
+# 西蒙与芙蕾德莉卡
+
+大约三十多年前，著名的冒险家西蒙·佩奇来到蒙德生活，成为西风教会的大主教，并与古恩希尔德家族的小姐芙蕾德莉卡相爱，育有两个女儿：琴和芭芭拉，后来因感情因素离婚，两人离异后琴从母姓，芭芭拉从父姓。
+
+## 元数据信息
+- ID: region_mondstadt_child_120
+- 来源: 蒙德 - 原神WIKI_BWIKI_哔哩哔哩.html
+- 来源文件: 蒙德 - 原神WIKI_BWIKI_哔哩哔哩.html
+- 页面类型: region_mondstadt
+- 内容类型: child_block
+- 章节标题: 西蒙与芙蕾德莉卡
+- 父块ID: region_mondstadt_parent_001

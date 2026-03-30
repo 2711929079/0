@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>语音测试</title>
+</head>
+<body>
+    <h1>语音测试页面</h1>
+    <button id="testBtn">测试麦克风权限</button>
+    <div id="status"></div>
+    
+    <script>
+        const testBtn = document.getElementById('testBtn');
+        const status = document.getElementById('status');
+        
+        testBtn.addEventListener('click', async () => {
+            try {
+                status.textContent = '正在请求麦克风权限...';
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                status.textContent = '麦克风权限已获取！';
+                
+                // 测试MediaRecorder
+                const mediaRecorder = new MediaRecorder(stream);
+                status.textContent += ' MediaRecorder可用';
+                
+                // 测试AudioContext
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                status.textContent += ' AudioContext可用';
+                
+                stream.getTracks().forEach(track => track.stop());
+                
+            } catch (error) {
+                status.textContent = '错误: ' + error.message;
+                console.error('麦克风权限错误:', error);
+            }
+        });
+    </script>
+</body>
+</html>

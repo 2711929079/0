@@ -1,0 +1,16 @@
+{
+  "long_term_memory": [
+    {
+      "id": 1,
+      "timestamp": "2026-03-26T19:00:35.665856",
+      "content": "我是来自世界之外的旅行者，目前正在提瓦特大陆上寻找我的哥哥/妹妹。",
+      "importance": 0.5,
+      "tags": [
+        "旅行者"
+      ],
+      "type": "long_term",
+      "access_count": 0
+    }
+  ],
+  "last_updated": "2026-03-26T19:00:35.665856"
+}

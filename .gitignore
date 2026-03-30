@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.env
+
+# Database
+data/chroma_db/
+*.db
+*.sqlite3
+
+# Audio files
+audio_files/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Cloudflare
+cloudflared.exe
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Debug
+debug_login.html
