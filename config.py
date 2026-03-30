@@ -3,11 +3,11 @@ import os
 class Config:
     # 底座模型配置（本地模型）
     BASE_URL = "http://202.115.141.46:8080/v1"
-    API_KEY = os.environ.get("LOCAL_MODEL_API_KEY", "sk-a30941d66ea10a83aefea191ee0efe5c")
+    API_KEY = os.environ.get("LOCAL_MODEL_API_KEY", "")
     MODEL_NAME = "MiniMax-M2.5"
 
     # 硅基流动API密钥（用于语音合成）
-    SILICONFLOW_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "sk-xunrtasozpxvnssuowgyinrbylltwfmeesesjdqzhtsoywnc")
+    SILICONFLOW_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "")
     #MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
     #MODEL_NAME = "Qwen/Qwen3.5-4B"
     MAX_TOKENS = 1000
@@ -27,9 +27,9 @@ class Config:
     # 自定义语音类型：'tts'（使用自定义TTS音色）或 'none'（禁用）
     CUSTOM_VOICE_TYPE = 'tts'  # 'tts' 或 'none'
     # 自定义音色ID（硅基流动的自定义音色）
-    CUSTOM_VOICE_ID = "speech:ying:8ccoy7xf2n:gdwndqcpxtpaiqkeatqc"  # 荧的音色
+    CUSTOM_VOICE_ID = "speech:ying:"  # 荧的音色
     # 派蒙的音色ID（使用用户提供的声音文件生成）
-    PAIMON_VOICE_ID = "speech:paimon:8ccoy7xf2n:bbfbtrjmkfdiytvlzgxh"  # 派蒙的音色（已更新）
+    PAIMON_VOICE_ID = "speech:paimon:"  # 派蒙的音色（已更新）
     
     # LangChain配置
     BING_API_KEY = os.environ.get("BING_API_KEY", "")  # Bing搜索API密钥
