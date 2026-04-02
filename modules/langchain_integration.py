@@ -1004,10 +1004,37 @@ class LangChainIntegration:
                 if entity not in recent_entities:
                     recent_entities.append(entity)
             
-            # 查询重写：处理错别字、语义扩展和指代解析
-            rewritten_query, processing_info = self.query_rewrite.rewrite_query(query, recent_entities)
-            self.logger.info(f"重写后的查询: {rewritten_query}")
-            self.logger.info(f"处理信息: {processing_info}")
+            # 检查是否是比较类问题（在查询重写之前检测，防止关键词丢失）
+            is_comparison = False
+            comparison_keywords = ['谁厉害', '哪个强', '对比', '比较', '谁更好', '哪个更好', '谁更强']
+            
+            # 检查当前查询
+            for keyword in comparison_keywords:
+                if keyword in query:
+                    is_comparison = True
+                    break
+            
+            # 如果当前查询没有比较关键词，检查最近的对话历史（用户可能在回应之前的比较问题）
+            if not is_comparison and llm_instance:
+                recent_history = llm_instance.get_recent_messages(5)  # 获取最近5条消息
+                for msg in recent_history:
+                    for keyword in comparison_keywords:
+                        if keyword in msg['content']:
+                            is_comparison = True
+                            self.logger.info(f"从对话历史中检测到比较类问题关键词: {keyword}")
+                            break
+                    if is_comparison:
+                        break
+            
+            # 查询重写：使用LLM进行查询理解和重写
+            if llm_instance:
+                rewritten_query = llm_instance.rewrite_query(query, recent_entities)
+                self.logger.info(f"LLM重写后的查询: {rewritten_query}")
+            else:
+                # 回退到传统查询重写
+                rewritten_query, processing_info = self.query_rewrite.rewrite_query(query, recent_entities)
+                self.logger.info(f"传统重写后的查询: {rewritten_query}")
+                self.logger.info(f"处理信息: {processing_info}")
             
             # 使用重写后的查询进行后续处理
             query = rewritten_query
@@ -1015,27 +1042,69 @@ class LangChainIntegration:
             # 步骤1：查询知识图谱（优先级最高）
             self.logger.info("步骤1：查询知识图谱")
             graph_result = self.query_graph_database(query)
-            if graph_result:
-                self.logger.info("知识图谱查询成功，直接返回结果")
-                self.query_cache[cache_key] = graph_result
-                return graph_result
             
             # 步骤2：查询向量数据库
             self.logger.info("步骤2：查询向量数据库")
             vector_result = self.query_vector_database(query)
+            
+            # 步骤3：查询记忆数据库（关键词匹配）
+            self.logger.info("步骤3：查询记忆数据库")
+            memory_result = self.query_memory_database(query)
+            
+            # 构建上下文
+            context_parts = []
+            if graph_result:
+                context_parts.append(f"【知识图谱信息】\n{graph_result}")
+            if vector_result:
+                context_parts.append(f"【知识库信息】\n{vector_result}")
+            if memory_result:
+                context_parts.append(f"【记忆信息】\n{memory_result}")
+            
+            # 如果是比较类问题，让LLM进行增强和评价（即使没有检索结果）
+            if is_comparison and llm_instance:
+                self.logger.info("检测到比较类问题，使用LLM进行增强和评价")
+                
+                # 构建提示词
+                context = "\n\n".join(context_parts)
+                enhanced_prompt = f"""
+你是提瓦特大陆的{self.role}，现在需要对用户的问题进行回答。
+
+用户问题：{query}
+
+相关资料：
+{context}
+
+请基于以上资料（如果有），对用户的问题给出你的主观评价和比较。回答要求：
+1. 如果有资料，先简要总结相关资料中的信息
+2. 然后给出你的主观评价和比较
+3. 使用"我觉得"、"在我看来"等主观表述
+4. 保持{self.role}的角色风格，不要太机械化
+5. 语言要自然、流畅，符合角色性格
+
+请直接给出最终回答，不要有任何多余的内容。
+                """.strip()
+                
+                # 使用LLM生成增强后的回答
+                try:
+                    enhanced_response = llm_instance.generate_response(enhanced_prompt)
+                    if enhanced_response:
+                        self.logger.info("LLM增强回答成功")
+                        self.query_cache[cache_key] = enhanced_response
+                        return enhanced_response
+                except Exception as e:
+                    self.logger.error(f"LLM增强失败: {e}")
+            
+            # 如果不是比较类问题，或者LLM增强失败，使用原始检索结果
             if vector_result:
                 self.logger.info("向量数据库查询成功，返回结果")
                 self.query_cache[cache_key] = vector_result
                 return vector_result
+            elif graph_result:
+                self.logger.info("知识图谱查询成功，返回结果")
+                self.query_cache[cache_key] = graph_result
+                return graph_result
             
-            # 步骤3：查询记忆数据库（关键词匹配）- 记忆数据库必须伴随整个流程，但不直接返回结果
-            self.logger.info("步骤3：查询记忆数据库")
-            memory_result = self.query_memory_database(query)
-            
-            # 记忆查询结果不直接返回，而是作为上下文提供给LLM
-            # 如果知识图谱和向量数据库都没有结果，返回None让LLM处理（LLM会使用记忆作为上下文）
-            
-            # 步骤4：如果所有数据库都没有结果，返回None让LLM处理
+            # 如果所有数据库都没有结果，返回None让LLM处理（LLM会使用记忆作为上下文）
             self.logger.info("所有数据库查询均无结果，返回None")
             return None
             

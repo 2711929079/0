@@ -1,30 +1,22 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <title>登录按钮调试</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录测试页面</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 50px; }
-        .login-container {
-            display: flex !important;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 0.95);
-            z-index: 9999 !important;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
         }
         .login-box {
             background: white;
             padding: 40px;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             text-align: center;
-            width: 400px;
-            max-width: 90%;
         }
         .login-title {
             font-size: 24px;
@@ -32,37 +24,23 @@
             color: #2c3e50;
             margin-bottom: 10px;
         }
-        .login-subtitle {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 30px;
-        }
         .login-input {
             padding: 15px 20px;
             width: 280px;
-            max-width: 100%;
-            border: 2px solid #e9ecef;
-            border-radius: 25px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
             font-size: 16px;
-            margin-bottom: 20px;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-        .login-input:focus {
-            border-color: #3498db;
         }
         .login-button {
             padding: 15px 40px;
             background-color: #3498db;
             color: white;
             border: none;
-            border-radius: 25px;
+            border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-            width: 280px;
-            max-width: 100%;
+            margin: 10px 0;
         }
         .login-button:hover {
             background-color: #2980b9;
@@ -78,124 +56,111 @@
         .login-status.success {
             color: #27ae60;
         }
-        .debug-info {
-            margin-top: 20px;
+        .console-output {
+            background: #f5f5f5;
             padding: 10px;
-            background: #f0f0f0;
             border-radius: 5px;
-            font-family: monospace;
-            font-size: 12px;
+            margin-top: 20px;
             max-height: 200px;
             overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
         }
     </style>
 </head>
 <body>
-    <div class="login-container" id="loginContainer">
-        <div class="login-box">
-            <div class="login-title">旅行者-荧</div>
-            <div class="login-subtitle">请输入访问口令</div>
-            <input type="password" class="login-input" id="passwordInput" placeholder="输入口令..." autocomplete="off">
-            <button class="login-button" id="loginButton">登录</button>
-            <div class="login-status" id="loginStatus"></div>
-            <div class="debug-info" id="debugInfo"></div>
-        </div>
+    <div class="login-box">
+        <div class="login-title">旅行者与派蒙</div>
+        <div class="login-subtitle">请输入访问口令</div>
+        <input type="password" class="login-input" id="passwordInput" placeholder="输入口令..." autocomplete="off">
+        <button class="login-button" id="loginButton">登录</button>
+        <div class="login-status" id="loginStatus"></div>
     </div>
+    
+    <div class="console-output" id="consoleOutput"></div>
 
     <script>
+        // 自定义控制台输出
         function log(message) {
-            const debugInfo = document.getElementById('debugInfo');
-            debugInfo.innerHTML += message + '<br>';
+            const consoleOutput = document.getElementById('consoleOutput');
+            const timestamp = new Date().toLocaleTimeString();
+            consoleOutput.innerHTML += `[${timestamp}] ${message}<br>`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
             console.log(message);
         }
 
-        // DOM加载完成后执行
-        document.addEventListener('DOMContentLoaded', function() {
-            log('=== DOM加载完成 ===');
+        log('=== 页面加载完成 ===');
+        
+        // 检查元素是否存在
+        const loginButton = document.getElementById('loginButton');
+        const passwordInput = document.getElementById('passwordInput');
+        const loginStatus = document.getElementById('loginStatus');
+        
+        log(`登录按钮存在: ${!!loginButton}`);
+        log(`密码输入框存在: ${!!passwordInput}`);
+        log(`登录状态元素存在: ${!!loginStatus}`);
+        
+        // 登录处理函数
+        function handleLoginClick() {
+            log('=== 登录按钮被点击 ===');
+            const password = passwordInput.value.trim();
+            log(`输入的密码: ${password ? '已提供' : '空'}`);
             
-            const loginButton = document.getElementById('loginButton');
-            const passwordInput = document.getElementById('passwordInput');
-            const loginStatus = document.getElementById('loginStatus');
-            
-            log('登录按钮:', loginButton ? '存在' : '不存在');
-            log('密码输入框:', passwordInput ? '存在' : '不存在');
-            log('登录状态:', loginStatus ? '存在' : '不存在');
-            
-            if (loginButton) {
-                // 检查按钮样式
-                const style = window.getComputedStyle(loginButton);
-                log('按钮样式:');
-                log('  display:', style.display);
-                log('  visibility:', style.visibility);
-                log('  opacity:', style.opacity);
-                log('  pointer-events:', style.pointerEvents);
-                log('  cursor:', style.cursor);
-                log('  z-index:', style.zIndex);
-                
-                // 检查按钮位置
-                const rect = loginButton.getBoundingClientRect();
-                log('按钮位置:');
-                log('  top:', rect.top);
-                log('  left:', rect.left);
-                log('  width:', rect.width);
-                log('  height:', rect.height);
-                
-                // 绑定点击事件
-                loginButton.addEventListener('click', function() {
-                    log('=== 登录按钮被点击 ===');
-                    const password = passwordInput.value.trim();
-                    log('输入的密码:', password ? '已提供' : '空');
-                    
-                    if (!password) {
-                        log('密码为空，显示错误信息');
-                        loginStatus.textContent = '请输入口令';
-                        loginStatus.className = 'login-status error';
-                        return;
-                    }
-                    
-                    log('密码不为空，调用login函数');
-                    login(password);
-                });
-                
-                log('点击事件绑定完成');
-                
-                // 手动测试点击
-                setTimeout(function() {
-                    log('手动触发点击事件...');
-                    loginButton.click();
-                }, 2000);
+            if (!password) {
+                loginStatus.textContent = '请输入口令';
+                loginStatus.className = 'login-status error';
+                return;
             }
-        });
-
-        // 登录函数
-        async function login(password) {
-            log('开始登录函数');
-            try {
-                log('登录请求:', { password: password ? '已提供' : '空' });
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: password })
-                });
-                log('响应状态:', response.status);
-                const data = await response.json();
-                log('响应数据:', JSON.stringify(data));
-                
+            
+            loginStatus.textContent = '登录中...';
+            loginStatus.className = 'login-status success';
+            
+            // 发送登录请求
+            fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password })
+            })
+            .then(function(response) {
+                log(`响应状态: ${response.status}`);
+                return response.json();
+            })
+            .then(function(data) {
+                log(`登录响应: ${JSON.stringify(data)}`);
                 if (data.success) {
-                    log('登录成功！');
                     loginStatus.textContent = '登录成功！';
                     loginStatus.className = 'login-status success';
-                    document.getElementById('loginContainer').classList.add('hidden');
+                    log('登录成功，保存会话信息');
                 } else {
-                    log('登录失败:', data.error);
                     loginStatus.textContent = data.error || '登录失败';
                     loginStatus.className = 'login-status error';
                 }
-            } catch (error) {
-                log('网络错误:', error);
+            })
+            .catch(function(error) {
+                log(`登录失败: ${error.message}`);
                 loginStatus.textContent = '网络错误';
                 loginStatus.className = 'login-status error';
-            }
+            });
+        }
+        
+        // 绑定登录按钮点击事件
+        if (loginButton) {
+            log('开始绑定登录按钮点击事件');
+            loginButton.addEventListener('click', handleLoginClick);
+            log('登录按钮点击事件绑定完成');
+        } else {
+            log('登录按钮不存在，无法绑定点击事件');
+        }
+        
+        // 绑定回车事件
+        if (passwordInput) {
+            passwordInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    log('按下Enter键，触发登录');
+                    handleLoginClick();
+                }
+            });
+            log('密码输入框回车事件绑定完成');
         }
     </script>
 </body>

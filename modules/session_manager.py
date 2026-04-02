@@ -10,9 +10,11 @@ class SessionManager:
         self.logger = logging.getLogger(__name__)
         # 会话存储：session_id -> (llm_instance, username, memory_manager, role)
         self.sessions: Dict[str, Tuple[LLMInterface, Optional[str], MemoryManager, str]] = {}
+        # 用户名到会话ID的映射：username -> session_id
+        self.username_to_session: Dict[str, str] = {}
     
     def create_session(self, username: Optional[str] = None, role: str = "ying") -> str:
-        """创建新会话
+        """创建新会话或返回现有会话
         
         Args:
             username: 用户名，可选
@@ -21,10 +23,31 @@ class SessionManager:
         Returns:
             会话ID
         """
+        # 如果提供了用户名，检查是否已有会话
+        if username and username in self.username_to_session:
+            session_id = self.username_to_session[username]
+            # 检查会话是否仍然存在
+            if session_id in self.sessions:
+                _, existing_username, _, existing_role = self.sessions[session_id]
+                # 如果角色不同，更新会话的角色
+                if existing_role != role:
+                    memory_manager = MemoryManager(username=username, role=role)
+                    llm_instance = LLMInterface(memory_manager=memory_manager, role=role)
+                    self.sessions[session_id] = (llm_instance, username, memory_manager, role)
+                    self.logger.info(f"更新会话角色: {session_id}, 用户: {username}, 新角色: {role}")
+                self.logger.info(f"用户已有会话，返回现有会话: {session_id}, 用户: {username}")
+                return session_id
+        
+        # 创建新会话
         session_id = str(uuid.uuid4())
         memory_manager = MemoryManager(username=username, role=role)
         llm_instance = LLMInterface(memory_manager=memory_manager, role=role)
         self.sessions[session_id] = (llm_instance, username, memory_manager, role)
+        
+        # 如果提供了用户名，建立用户名到会话ID的映射
+        if username:
+            self.username_to_session[username] = session_id
+        
         self.logger.info(f"创建新会话: {session_id}, 用户: {username}, 角色: {role}")
         return session_id
     
@@ -97,8 +120,14 @@ class SessionManager:
             是否删除成功
         """
         if session_id in self.sessions:
+            # 获取用户名，用于删除映射
+            _, username, _, _ = self.sessions[session_id]
+            # 删除会话
             del self.sessions[session_id]
-            self.logger.info(f"删除会话: {session_id}")
+            # 如果有用户名，删除用户名到会话ID的映射
+            if username and username in self.username_to_session:
+                del self.username_to_session[username]
+            self.logger.info(f"删除会话: {session_id}, 用户: {username}")
             return True
         return False
     
@@ -113,6 +142,7 @@ class SessionManager:
     def clear_all_sessions(self):
         """清空所有会话"""
         self.sessions.clear()
+        self.username_to_session.clear()
         self.logger.info("清空所有会话")
 
 # 创建全局会话管理器实例

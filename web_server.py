@@ -6,6 +6,7 @@ import uuid
 import re
 import time
 import json
+import datetime
 from modules.llm_interface import LLMInterface
 from modules.text_to_speech import TextToSpeech
 from modules.langchain_integration import LangChainIntegration
@@ -16,6 +17,7 @@ from modules.graph_manager import GraphManager
 from modules.prompt_hook import prompt_hook
 from modules.rate_limiter import rate_limiter
 from modules.input_validator import input_validator
+from modules.cache_manager import CacheManager
 from config import config
 
 # 设置日志
@@ -41,6 +43,7 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 llm = LLMInterface()
 tts = TextToSpeech()
 langchain = LangChainIntegration(role='ying')
+cache_manager = CacheManager()
 
 # 加载知识库（仅在首次启动或数据库不存在时加载）
 if hasattr(config, 'KNOWLEDGE_BASE_URLS') and config.KNOWLEDGE_BASE_URLS:
@@ -61,7 +64,7 @@ HTML_TEMPLATE = '''
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>旅行者-荧 - v{{version}}</title>
+    <title>旅行者与派蒙</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
@@ -477,7 +480,7 @@ HTML_TEMPLATE = '''
     <!-- 登录界面 -->
     <div class="login-container" id="loginContainer">
         <div class="login-box">
-            <div class="login-title">旅行者-荧</div>
+            <div class="login-title">旅行者与派蒙</div>
             <div class="login-subtitle">请输入访问口令</div>
             <input type="password" class="login-input" id="passwordInput" placeholder="输入口令..." autocomplete="off">
             <button class="login-button" id="loginButton">登录</button>
@@ -536,8 +539,6 @@ HTML_TEMPLATE = '''
     </div>
     
     <script>
-        // 版本号：{{version}}
-        console.log('=== 页面版本:', '{{version}}', '===');
         console.log('=== 最新修改：滚动位置独立保存功能 ===');
         
         // 全局变量
@@ -630,7 +631,7 @@ HTML_TEMPLATE = '''
         // 加载聊天记录函数
 
         
-        function addMessage(message, isUser) {
+        function addMessage(message, isUser, role) {
             var chatContainer = document.getElementById('chatContainer');
             var messageDiv = document.createElement('div');
             messageDiv.className = isUser ? 'message user-message' : 'message ai-message';
@@ -641,7 +642,7 @@ HTML_TEMPLATE = '''
             
             var authorDiv = document.createElement('div');
             authorDiv.className = 'message-author';
-            authorDiv.textContent = isUser ? '您' : roleConfig[currentRole].author;
+            authorDiv.textContent = isUser ? '您' : roleConfig[role || currentRole].author;
             
             var contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
@@ -657,8 +658,8 @@ HTML_TEMPLATE = '''
                 avatarDiv.id = 'avatar-' + Date.now();
                 
                 var avatarImg = document.createElement('img');
-                avatarImg.src = roleConfig[currentRole].avatar;
-                avatarImg.alt = roleConfig[currentRole].author;
+                avatarImg.src = roleConfig[role || currentRole].avatar;
+                avatarImg.alt = roleConfig[role || currentRole].author;
                 avatarImg.className = 'avatar-small';
                 
                 avatarDiv.appendChild(avatarImg);
@@ -671,61 +672,6 @@ HTML_TEMPLATE = '''
             
             // 保存聊天记录
             saveChatHistory();
-        }
-        
-        // 登录函数
-        function login(password) {
-            console.log('开始登录函数');
-            console.log('登录请求:', { password: password ? '已提供' : '空' });
-            console.log('fetch API调用开始');
-            return fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ password: password })
-            })
-            .then(function(response) {
-                console.log('fetch API调用完成，响应状态:', response.status);
-                return response.json();
-            })
-            .then(function(data) {
-                console.log('登录响应:', data);
-                if (data.success) {
-                    currentPassword = password;
-                    // 保存口令到本地存储
-                    localStorage.setItem('savedPassword', password);
-                    console.log('登录成功，currentPassword已设置:', currentPassword);
-                    
-                    // 保存会话ID
-                    if (data.session_id) {
-                        sessionId = data.session_id;
-                        localStorage.setItem('sessionId', sessionId);
-                        console.log('保存会话ID:', sessionId);
-                        
-                        // 登录成功后加载聊天记录
-                        console.log('开始加载聊天记录，当前角色:', currentRole);
-                        console.log('当前会话ID:', sessionId);
-                        loadChatHistory(currentRole);
-                    }
-                    
-                    document.getElementById('loginStatus').textContent = '登录成功！';
-                    document.getElementById('loginStatus').className = 'login-status success';
-                    document.getElementById('loginContainer').classList.add('hidden');
-                    return true;
-                } else {
-                    console.log('登录失败:', data.error || '未知错误');
-                    document.getElementById('loginStatus').textContent = data.error || '登录失败，请重试';
-                    document.getElementById('loginStatus').className = 'login-status error';
-                    return false;
-                }
-            })
-            .catch(function(error) {
-                console.error('登录失败:', error);
-                document.getElementById('loginStatus').textContent = '网络错误，请重试';
-                document.getElementById('loginStatus').className = 'login-status error';
-                return false;
-            });
         }
         
         // 发送消息函数
@@ -755,12 +701,15 @@ HTML_TEMPLATE = '''
             chatContainer.appendChild(loadingDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
             
+            // 保存发送时的角色，防止切换角色后响应显示错误
+            var sendingRole = currentRole;
+            
             var requestData = { 
                 message: message,
                 enable_audio: voiceToggle.checked,
                 stream: streamToggle.checked,
                 password: currentPassword,
-                role: currentRole
+                role: sendingRole
             };
             if (sessionId) {
                 requestData.session_id = sessionId;
@@ -780,6 +729,14 @@ HTML_TEMPLATE = '''
                 .then(function(response) {
                     console.log('收到响应，状态码:', response.status);
                     console.log('响应头:', response.headers);
+                    
+                    // 检查角色是否已切换，如果已切换则不显示响应
+                    if (currentRole !== sendingRole) {
+                        console.warn('角色已切换，取消显示响应');
+                        chatContainer.removeChild(loadingDiv);
+                        return;
+                    }
+                    
                     chatContainer.removeChild(loadingDiv);
                     if (!response.ok) {
                         console.error('响应状态错误:', response.status);
@@ -802,7 +759,7 @@ HTML_TEMPLATE = '''
                         // 创建作者和内容
                         var authorDiv = document.createElement('div');
                         authorDiv.className = 'message-author';
-                        authorDiv.textContent = roleConfig[currentRole].author;
+                        authorDiv.textContent = roleConfig[sendingRole].author;
                         
                         var contentDiv = document.createElement('div');
                         contentDiv.className = 'message-content';
@@ -815,8 +772,8 @@ HTML_TEMPLATE = '''
                         avatarDiv.className = 'message-avatar';
                         
                         var avatarImg = document.createElement('img');
-                        avatarImg.src = roleConfig[currentRole].avatar;
-                        avatarImg.alt = roleConfig[currentRole].author;
+                        avatarImg.src = roleConfig[sendingRole].avatar;
+                        avatarImg.alt = roleConfig[sendingRole].author;
                         avatarImg.className = 'avatar-small';
                         
                         avatarDiv.appendChild(avatarImg);
@@ -845,7 +802,7 @@ HTML_TEMPLATE = '''
                                 }
                                 
                                 var chunk = decoder.decode(result.value, { stream: true });
-                                var lines = chunk.split('\\n');
+                                var lines = chunk.split('\n');
                                 
                                 lines.forEach(function(line) {
                                     if (line.startsWith('data: ')) {
@@ -1178,11 +1135,19 @@ HTML_TEMPLATE = '''
                 body: JSON.stringify(requestData)
             })
             .then(function(response) {
+                // 检查角色是否已切换，如果已切换则不显示响应
+                if (currentRole !== sendingRole) {
+                    console.warn('角色已切换，取消显示响应');
+                    chatContainer.removeChild(loadingDiv);
+                    return;
+                }
+                
                 chatContainer.removeChild(loadingDiv);
                 return response.json();
             })
             .then(function(data) {
-                addMessage(data.response, false);
+                if (!data) return;
+                addMessage(data.response, false, sendingRole);
                 
                 if (data.session_id) {
                     sessionId = data.session_id;
@@ -2009,8 +1974,6 @@ HTML_TEMPLATE = '''
 
 
         
-
-
         // 页面加载完成后初始化
         window.addEventListener('load', function() {
             var voiceToggle = document.getElementById('voiceToggle');
@@ -2199,10 +2162,20 @@ HTML_TEMPLATE = '''
             
             // 绑定登录按钮点击事件
             console.log('=== 开始绑定登录按钮点击事件 ===');
+            console.log('loginButton元素:', loginButton);
+            console.log('loginButton类型:', typeof loginButton);
+            console.log('handleLoginClick函数:', handleLoginClick);
+            console.log('handleLoginClick类型:', typeof handleLoginClick);
+            
             if (loginButton) {
                 console.log('登录按钮存在，开始绑定点击事件');
-                loginButton.addEventListener('click', handleLoginClick);
-                console.log('登录按钮点击事件绑定完成');
+                try {
+                    loginButton.addEventListener('click', handleLoginClick);
+                    console.log('登录按钮点击事件绑定完成');
+                    console.log('登录按钮当前事件监听器数量:', loginButton.onclick ? '1' : '0');
+                } catch (error) {
+                    console.error('绑定登录按钮事件时出错:', error);
+                }
             } else {
                 console.error('登录按钮不存在，无法绑定点击事件');
             }
@@ -2271,9 +2244,10 @@ HTML_TEMPLATE = '''
                 
                 if (savedPassword && savedPassword.length > 0) {
                     console.log('开始自动登录...');
-                    login(savedPassword).then(function(success) {
-                        console.log('自动登录结果:', success ? '成功' : '失败');
-                    });
+                    // 设置密码并触发登录
+                    document.getElementById('passwordInput').value = savedPassword;
+                    handleLoginClick();
+                    console.log('自动登录已触发');
                 } else {
                     console.log('没有保存的口令或口令为空，显示登录界面');
                 }
@@ -2289,35 +2263,8 @@ def index():
     """主页"""
     logger.info("收到根路由请求")
     try:
-        import random
-        import time
-        
-        logger.info("测试1: 导入成功")
-        
-        # 测试config模块
-        logger.info(f"config模块存在: {config is not None}")
-        
-        # 测试WELCOME_MESSAGES
-        logger.info(f"WELCOME_MESSAGES存在: {'WELCOME_MESSAGES' in dir(config)}")
-        if 'WELCOME_MESSAGES' in dir(config):
-            logger.info(f"WELCOME_MESSAGES类型: {type(config.WELCOME_MESSAGES)}")
-            logger.info(f"WELCOME_MESSAGES包含ying: {'ying' in config.WELCOME_MESSAGES}")
-            
-        logger.info("测试2: config访问成功")
-        
-        # 使用默认角色（荧）的欢迎语
-        welcome_message = random.choice(config.WELCOME_MESSAGES["ying"])
-        logger.info(f"欢迎语: {welcome_message}")
-        
-        # 添加版本号，强制浏览器刷新
-        version = int(time.time())
-        logger.info(f"版本号: {version}")
-        
-        logger.info("测试3: 变量准备完成")
-        
-        logger.info("开始渲染模板")
-        html_content = render_template_string(HTML_TEMPLATE, welcome_message=welcome_message, version=version)
-        logger.info("模板渲染成功")
+        with open('simple_original.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
         
         # 创建Response对象并设置缓存控制头
         response = Response(html_content)
@@ -2376,6 +2323,18 @@ def minimal_login():
 def login_debug():
     """登录按钮调试页面"""
     with open('test_login_debug.html', 'r', encoding='utf-8') as f:
+        return f.read()
+
+@app.route('/test-simple')
+def test_simple():
+    """极简登录测试页面"""
+    with open('test_login_simple.html', 'r', encoding='utf-8') as f:
+        return f.read()
+
+@app.route('/simple-main')
+def simple_main():
+    """简化版主页面"""
+    with open('simple_main.html', 'r', encoding='utf-8') as f:
         return f.read()
 
 @app.route('/button-test')
@@ -2506,9 +2465,85 @@ def login():
         logger.error(f"登录处理失败: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/chat-messages', methods=['GET'])
+def get_chat_messages():
+    """分页获取聊天消息API端点"""
+    try:
+        session_id = request.args.get('session_id')
+        role = request.args.get('role', 'ying')
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        
+        if not session_id:
+            return jsonify({"error": "会话ID不能为空"}), 400
+        
+        # 获取用户信息
+        username = session_manager.get_username_from_session(session_id)
+        if not username:
+            return jsonify({"error": "无效的会话ID"}), 401
+        
+        # 创建记忆管理器
+        memory_manager = MemoryManager(username=username, role=role)
+        
+        # 分页加载聊天消息
+        messages = memory_manager.load_chat_messages(role, limit=limit, offset=offset)
+        
+        # 获取消息总数
+        total_count = memory_manager.get_chat_message_count(role)
+        
+        return jsonify({
+            "success": True,
+            "messages": messages,
+            "total_count": total_count,
+            "limit": limit,
+            "offset": offset
+        })
+        
+    except Exception as e:
+        logger.error(f"获取聊天消息失败: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/chat-message', methods=['POST'])
+def save_chat_message():
+    """保存单条聊天消息API端点"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        role = data.get('role', 'ying')
+        message_type = data.get('message_type')
+        content = data.get('content')
+        audio_url = data.get('audio_url')
+        
+        if not session_id:
+            return jsonify({"error": "会话ID不能为空"}), 400
+        if not message_type:
+            return jsonify({"error": "消息类型不能为空"}), 400
+        if not content:
+            return jsonify({"error": "聊天内容不能为空"}), 400
+        
+        # 获取用户信息
+        username = session_manager.get_username_from_session(session_id)
+        if not username:
+            return jsonify({"error": "无效的会话ID"}), 401
+        
+        # 创建记忆管理器
+        memory_manager = MemoryManager(username=username, role=role)
+        
+        # 保存聊天消息
+        success = memory_manager.save_chat_message(role, message_type, content, audio_url)
+        
+        return jsonify({
+            "success": success
+        })
+        
+    except Exception as e:
+        logger.error(f"保存聊天消息失败: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/chat-history', methods=['GET'])
 def get_chat_history():
-    """获取聊天记录API端点"""
+    """获取聊天历史记录API端点"""
     try:
         session_id = request.args.get('session_id')
         role = request.args.get('role', 'ying')
@@ -2524,21 +2559,75 @@ def get_chat_history():
         # 创建记忆管理器
         memory_manager = MemoryManager(username=username, role=role)
         
-        # 加载聊天记录
-        chat_history = memory_manager.load_chat_history(role)
+        # 加载聊天消息
+        messages = memory_manager.load_chat_messages(role, limit=100)
+        
+        # 构建HTML聊天记录
+        chat_history_html = ''
+        role_config = {
+            'ying': {
+                'name': '旅行者-荧',
+                'avatar': '/static/ying.png',
+                'author': '荧'
+            },
+            'paimon': {
+                'name': '应急食品-派蒙',
+                'avatar': '/static/paimon.jpg',
+                'author': '派蒙'
+            }
+        }
+        
+        for message in messages:
+            if message['type'] == 'user':
+                chat_history_html += f'''
+                    <div class="message user-message">
+                        <div class="message-avatar">
+                            <img src="https://via.placeholder.com/40" alt="用户" class="avatar-small">
+                        </div>
+                        <div class="message-content-wrapper">
+                            <div class="message-author">你</div>
+                            <div class="message-content">{message['content']}</div>
+                        </div>
+                    </div>
+                '''
+            else:
+                config = role_config[role]
+                audio_html = ''
+                if message['audio_url']:
+                    audio_html = f'''
+                        <button class="play-audio-btn" data-audio-url="{message['audio_url']}" title="播放">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M8 5v14l11-7z" fill="#4A90E2"></path>
+                            </svg>
+                        </button>
+                    '''
+                
+                chat_history_html += f'''
+                    <div class="message ai-message">
+                        <div class="message-avatar">
+                            <img src="{config['avatar']}" alt="{config['author']}" class="avatar-small">
+                            {audio_html}
+                        </div>
+                        <div class="message-content-wrapper">
+                            <div class="message-author">{config['author']}</div>
+                            <div class="message-content">{message['content']}</div>
+                        </div>
+                    </div>
+                '''
         
         return jsonify({
             "success": True,
-            "chat_history": chat_history
+            "chat_history": chat_history_html
         })
         
     except Exception as e:
-        logger.error(f"获取聊天记录失败: {e}")
+        logger.error(f"获取聊天历史失败: {e}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/api/chat-history', methods=['POST'])
-def save_chat_history():
-    """保存聊天记录API端点"""
+def save_chat_history_api():
+    """保存聊天历史记录API端点"""
     try:
         data = request.get_json()
         session_id = data.get('session_id')
@@ -2555,18 +2644,17 @@ def save_chat_history():
         if not username:
             return jsonify({"error": "无效的会话ID"}), 401
         
-        # 创建记忆管理器
-        memory_manager = MemoryManager(username=username, role=role)
-        
-        # 保存聊天记录
-        success = memory_manager.save_chat_history(role, content)
+        # 这里可以将HTML内容保存到数据库或文件
+        # 目前前端已经在localStorage中保存了备份
+        logger.info(f"保存聊天历史，用户: {username}, 角色: {role}")
         
         return jsonify({
-            "success": success
+            "success": True,
+            "message": "聊天历史保存成功"
         })
         
     except Exception as e:
-        logger.error(f"保存聊天记录失败: {e}")
+        logger.error(f"保存聊天历史失败: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/chat', methods=['POST'])
@@ -2717,8 +2805,9 @@ def chat():
         
         # 总是生成音频（用于重播功能）
         audio_url = None
-        # 生成音频文件
-        audio_filename = f"response_{uuid.uuid4().hex}.wav"
+        # 生成音频文件（使用时间戳确保唯一性和长时保存）
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        audio_filename = f"response_{session_id}_{timestamp}.wav"
         audio_path = os.path.join(AUDIO_DIR, audio_filename)
         
         logger.info(f"开始生成音频文件: {audio_filename}")
@@ -2743,34 +2832,36 @@ def chat():
             import traceback
             logger.error(f"异常详情: {traceback.format_exc()}")
         
+        # 保存聊天消息到数据库
+        try:
+            logger.info("保存聊天消息到数据库")
+            # 保存用户消息
+            memory_manager.save_chat_message(role, 'user', message)
+            # 保存AI回复（包含音频URL）
+            memory_manager.save_chat_message(role, 'assistant', response, audio_url)
+            logger.info("聊天消息保存成功")
+        except Exception as e:
+            logger.error(f"保存聊天消息失败: {e}")
+        
         if stream:
             # 流式输出
             def generate_stream():
                 # 先发送初始数据（不含文本内容）
-                yield f'data: {json.dumps({
-                    "type": "init",
-                    "session_id": session_id,
-                    "username": username,
-                    "audio_url": audio_url
-                })}\n\n'
+                yield f'data: {json.dumps({"type": "init", "session_id": session_id, "username": username, "audio_url": audio_url})}\n\n'
                 
                 # 逐字发送响应内容
                 for char in response:
-                    yield f'data: {json.dumps({
-                        "type": "text",
-                        "content": char
-                    })}\n\n'
+                    yield f'data: {json.dumps({"type": "text", "content": char})}\n\n'
                     time.sleep(0.02)  # 控制发送速度
                 
                 # 发送结束标志
-                yield f'data: {json.dumps({
-                    "type": "finish"
-                })}\n\n'
+                yield f'data: {json.dumps({"type": "finish"})}\n\n'
             
             return Response(generate_stream(), mimetype='text/event-stream')
         else:
             # 非流式输出
             return jsonify({
+                'success': True,
                 'response': response,
                 'audio_url': audio_url,
                 'session_id': session_id,
@@ -2779,6 +2870,180 @@ def chat():
         
     except Exception as e:
         logger.error(f"聊天处理失败: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/stream-chat', methods=['POST'])
+@rate_limiter.rate_limit('api_chat')
+def stream_chat():
+    """流式聊天API端点"""
+    try:
+        logger.info("收到/api/stream-chat请求")
+        
+        # 处理编码问题
+        try:
+            data = request.get_json(force=True)
+            logger.info(f"请求数据: {data}")
+        except Exception as e:
+            logger.error(f"解析JSON失败: {e}")
+            return jsonify({'error': '无效的JSON格式'}), 400
+        
+        message = data.get('message', '')
+        session_id = data.get('session_id', None)
+        password = data.get('password', None)
+        enable_audio = data.get('enable_audio', False)
+        role = data.get('role', 'ying')  # 默认角色为荧
+        
+        if not message:
+            return jsonify({'error': '消息不能为空'}), 400
+        
+        # 确保消息是字符串类型
+        message = str(message)
+        
+        # 输入验证：检测SQL注入和XSS攻击
+        is_sql_safe, sql_error = input_validator.validate_sql_injection(message)
+        if not is_sql_safe:
+            return jsonify({'error': sql_error}), 400
+        
+        is_xss_safe, xss_error = input_validator.validate_xss_attack(message)
+        if not is_xss_safe:
+            return jsonify({'error': xss_error}), 400
+        
+        # 清理输入数据
+        message = input_validator.sanitize_input(message)
+        
+        # 确保会话存在（支持用户认证和角色切换）
+        session_id, username = session_manager.ensure_session(session_id, password, role)
+        session_data = session_manager.get_session(session_id)
+        
+        if not session_data:
+            return jsonify({'error': '会话不存在'}), 400
+        
+        llm_instance, _, memory_manager, _ = session_data
+        
+        logger.info(f"收到消息: {message}")
+        logger.info(f"会话ID: {session_id}, 用户: {username}")
+        
+        # 提示词预处理 - 防止提示词失效和注入攻击
+        processed_message, is_malicious = prompt_hook.preprocess_prompt(message)
+        if is_malicious:
+            return jsonify({
+                'error': processed_message,
+                'session_id': session_id
+            }), 400
+        message = processed_message
+        
+        # 将用户消息添加到对话历史，以便指代解析
+        llm_instance.add_message("user", message)
+        
+        # 根据角色创建LangChainIntegration实例
+        role_langchain = LangChainIntegration(role=role)
+        
+        # 使用LangChain处理查询
+        logger.info(f"开始调用langchain.run_agent，角色: {role}")
+        response = role_langchain.run_agent(message, llm_instance)
+        logger.info(f"langchain.run_agent返回: {response}")
+        
+        if not response:
+            # 回退到普通LLM
+            response = llm_instance.generate_response(message)
+        
+        if not response:
+            response = "我现在不想对话，一会再来吧"
+        
+        logger.info(f"生成回复: {response}")
+        
+        # 将AI回复添加到对话历史
+        llm_instance.add_message("assistant", response)
+        
+        # 更新记忆
+        logger.info("更新记忆")
+        memory_manager.process_dialogue(message, response)
+        
+        # 过滤回复内容
+        def filter_response(text):
+            if not text:
+                return text
+                
+            import emoji
+            text = emoji.replace_emoji(text, replace='')
+            
+            special_chars = r'[`~!@#$%^&*()_\-+=<>?{}|\\/;"\[·！@#￥%……&*（）——=+{}|‘“”《》【】]'
+            text = re.sub(f'[{re.escape(special_chars)}]', '', text)
+            
+            text = re.sub(r'([，。！？；:])\1+', r'\1', text)
+            text = re.sub(r'\s+', ' ', text).strip()
+            text = re.sub(r'([\u4e00-\u9fa5]+)\s+([\u4e00-\u9fa5]+)', r'\1。\2', text)
+            text = re.sub(r'([，。！？；：])\s+', r'\1', text)
+            text = re.sub(r'\s+([，。！？；：])', r'\1', text)
+            
+            robotic_patterns = [
+                ('根据提供的信息', '根据我所知道的'),
+                ('在《原神》中', '在提瓦特大陆'),
+                ('旅行者「荧」', '我'),
+                ('我是《原神》中的', '我是'),
+                ('来自《原神》', ''),
+                ('作为《原神》角色', '')
+            ]
+            
+            for pattern, replacement in robotic_patterns:
+                text = text.replace(pattern, replacement)
+                
+            if not text or len(text.strip()) == 0:
+                text = "抱歉，我不太理解你的意思，可以换个方式问我吗？"
+                
+            return text
+        
+        response = filter_response(response)
+        logger.info(f"过滤后回复: {response}")
+        
+        # 生成音频文件（使用时间戳确保唯一性和长时保存）
+        audio_url = None
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        audio_filename = f"response_{session_id}_{timestamp}.wav"
+        audio_path = os.path.join(AUDIO_DIR, audio_filename)
+        
+        try:
+            role_tts = TextToSpeech(role=role)
+            success = role_tts.save_to_file(response, audio_path)
+            
+            if success:
+                audio_url = f"/audio/{audio_filename}"
+                logger.info(f"音频文件生成成功: {audio_filename}, URL: {audio_url}")
+        except Exception as e:
+            logger.error(f"音频文件生成异常: {e}")
+        
+        # 保存聊天消息到数据库
+        try:
+            logger.info("保存聊天消息到数据库")
+            # 保存用户消息
+            memory_manager.save_chat_message(role, 'user', message)
+            # 保存AI回复（包含音频URL）
+            memory_manager.save_chat_message(role, 'assistant', response, audio_url)
+            logger.info("聊天消息保存成功")
+        except Exception as e:
+            logger.error(f"保存聊天消息失败: {e}")
+        
+        # 流式输出
+        def generate_stream():
+            # 先发送开始标志
+            yield f'data: {json.dumps({"type": "start", "session_id": session_id, "username": username})}\n\n'
+            
+            # 逐字发送响应内容
+            for char in response:
+                yield f'data: {json.dumps({"type": "chunk", "content": char})}\n\n'
+                time.sleep(0.02)  # 控制发送速度
+            
+            # 发送音频URL
+            if audio_url:
+                yield f'data: {json.dumps({"type": "audio", "audio_url": audio_url})}\n\n'
+            
+            # 发送结束标志
+            yield f'data: {json.dumps({"type": "end"})}\n\n'
+        
+        return Response(generate_stream(), mimetype='text/event-stream')
+    
+    except Exception as e:
+        logger.error(f"流式聊天处理失败: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/synthesize_audio', methods=['POST'])
@@ -2836,22 +3101,6 @@ def health():
 if __name__ == '__main__':
     logger.info("启动Web服务器...")
     
-    # 根据配置决定是否启用HTTPS
-    if config.ENABLE_HTTPS:
-        # 检查SSL证书文件是否存在
-        if os.path.exists(config.SSL_CERT_FILE) and os.path.exists(config.SSL_KEY_FILE):
-            logger.info(f"启用HTTPS，端口: {config.HTTPS_PORT}")
-            app.run(
-                host='0.0.0.0', 
-                port=config.HTTPS_PORT, 
-                ssl_context=(config.SSL_CERT_FILE, config.SSL_KEY_FILE),
-                debug=False  # HTTPS模式下禁用debug
-            )
-        else:
-            logger.error("SSL证书文件不存在，回退到HTTP模式")
-            logger.info(f"启动HTTP服务器，端口: {config.PORT}")
-            app.run(host='0.0.0.0', port=config.PORT, debug=True)
-    else:
-        # HTTP模式
-        logger.info(f"启动HTTP服务器，端口: {config.PORT}")
-        app.run(host='0.0.0.0', port=config.PORT, debug=True)
+    # HTTP模式
+    logger.info(f"启动HTTP服务器，端口: {config.PORT}")
+    app.run(host='0.0.0.0', port=config.PORT, debug=True)

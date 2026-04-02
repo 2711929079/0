@@ -1,0 +1,33 @@
+<view class="container">
+  <!-- 角色切换区域 -->
+  <view class="role-switch">
+    <button class="role-button {{currentRole === 'ying' ? 'active' : ''}}" bindtap="switchRole" data-role="ying">🎮 荧</button>
+    <button class="role-button {{currentRole === 'paimon' ? 'active' : ''}}" bindtap="switchRole" data-role="paimon">🐦 派蒙</button>
+  </view>
+  
+  <!-- 聊天记录区域 -->
+  <scroll-view class="chat-container" scroll-y="true" scroll-into-view="{{scrollIntoView}}" enhanced>
+    <view wx:for="{{messages}}" wx:key="id" class="message-item">
+      <!-- 用户消息 -->
+      <view wx:if="{{item.role === 'user'}}" class="user-message">
+        <view class="user-avatar">👤</view>
+        <view class="message-content user-content">{{item.content}}</view>
+      </view>
+      
+      <!-- AI消息 -->
+      <view wx:else class="ai-message">
+        <view class="ai-avatar">{{item.role === 'ying' ? '🎮' : '🐦'}}</view>
+        <view class="message-content ai-content">
+          <text>{{item.content}}</text>
+          <button wx:if="{{item.audio_url}}" class="audio-button" bindtap="playAudio" data-url="{{item.audio_url}}">播放语音</button>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+  
+  <!-- 输入区域 -->
+  <view class="input-container">
+    <input class="input-box" placeholder="请输入消息..." value="{{inputValue}}" bindinput="onInputChange" bindconfirm="sendMessage" />
+    <button class="send-button" bindtap="sendMessage">发送</button>
+  </view>
+</view>

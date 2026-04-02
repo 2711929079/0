@@ -412,18 +412,13 @@ class PromptHook:
         # 检测恶意提示词
         for pattern in self.malicious_patterns:
             if re.search(pattern, prompt_lower):
-                self.logger.warning(f"检测到恶意提示词: {pattern}")
-                return "安全警告：检测到潜在的提示词注入攻击", True
+                self.logger.warning(f"检测到恶意提示词: {prompt}")
+                return "", True
         
         # 提示词标准化
         prompt = prompt.strip()
         
-        # 关键词提取和增强（可选）
-        keywords = self._extract_keywords(prompt)
-        if keywords:
-            enhanced_prompt = f"基于关键词：{', '.join(keywords)}\n\n{prompt}"
-            return enhanced_prompt, False
-        
+        # 直接返回原始提示词，不进行关键词增强
         return prompt, False
     
     def _extract_keywords(self, text: str) -> list:
@@ -438,10 +433,30 @@ class PromptHook:
         # 过滤停用词
         stopwords = {'的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好', '自己', '这'}
         
-        keywords = [word for word in words if word not in stopwords and len(word) > 1]
+        # 过滤并去重（使用集合保证绝对不重复）
+        keywords = []
+        seen = set()
+        for word in words:
+            if word not in stopwords and len(word) > 1 and word not in seen:
+                keywords.append(word)
+                seen.add(word)
+        
+        # 额外检查：确保不会提取到相同语义的词（如"你好"和"你好呀"）
+        final_keywords = []
+        final_seen = set()
+        for keyword in keywords:
+            # 检查是否有包含关系的词
+            is_duplicate = False
+            for existing in final_seen:
+                if keyword in existing or existing in keyword:
+                    is_duplicate = True
+                    break
+            if not is_duplicate:
+                final_keywords.append(keyword)
+                final_seen.add(keyword)
         
         # 返回前5个关键词
-        return keywords[:5]
+        return final_keywords[:5]
     
     def validate_prompt(self, prompt: str) -> bool:
         """验证提示词是否安全"""

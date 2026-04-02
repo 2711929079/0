@@ -2,17 +2,24 @@ import os
 
 class Config:
     # 底座模型配置（本地模型）
-    BASE_URL = ""
-    API_KEY = os.environ.get("LOCAL_MODEL_API_KEY", "")
+    BASE_URL = "http://202.115.141.46:8080/v1"
+    API_KEY = os.environ.get("LOCAL_MODEL_API_KEY", "sk-a30941d66ea10a83aefea191ee0efe5c")
     MODEL_NAME = "MiniMax-M2.5"
+    
+    # 查询重写模型配置（硅基流动Qwen3.5-4B）
+    QUERY_REWRITE_BASE_URL = "https://api.siliconflow.cn/v1"
+    QUERY_REWRITE_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "sk-xunrtasozpxvnssuowgyinrbylltwfmeesesjdqzhtsoywnc")
+    QUERY_REWRITE_MODEL_NAME = "Qwen/Qwen3.5-4B"
 
     # 硅基流动API密钥（用于语音合成）
-    SILICONFLOW_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "")
+    SILICONFLOW_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "sk-xunrtasozpxvnssuowgyinrbylltwfmeesesjdqzhtsoywnc")
+    #MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
+    #MODEL_NAME = "Qwen/Qwen3.5-4B"
     MAX_TOKENS = 1000
     TEMPERATURE = 0.7  
     
     # 语音识别配置
-    SPEECH_RECOGNITION_API_KEY = os.environ.get("SPEECH_RECOGNITION_API_KEY", "")
+    SPEECH_RECOGNITION_API_KEY = os.environ.get("SPEECH_RECOGNITION_API_KEY", "sk-xunrtasozpxvnssuowgyinrbylltwfmeesesjdqzhtsoywnc")
     SPEECH_RECOGNITION_LANGUAGE = "zh-CN"
     
     # 语音合成配置
@@ -25,9 +32,9 @@ class Config:
     # 自定义语音类型：'tts'（使用自定义TTS音色）或 'none'（禁用）
     CUSTOM_VOICE_TYPE = 'tts'  # 'tts' 或 'none'
     # 自定义音色ID（硅基流动的自定义音色）
-    CUSTOM_VOICE_ID = "speech:ying:"  # 荧的音色
+    CUSTOM_VOICE_ID = "speech:ying:8ccoy7xf2n:gdwndqcpxtpaiqkeatqc"  # 荧的音色
     # 派蒙的音色ID（使用用户提供的声音文件生成）
-    PAIMON_VOICE_ID = "speech:paimon:"  # 派蒙的音色（已更新）
+    PAIMON_VOICE_ID = "speech:paimon:8ccoy7xf2n:bbfbtrjmkfdiytvlzgxh"  # 派蒙的音色（已更新）
     
     # LangChain配置
     BING_API_KEY = os.environ.get("BING_API_KEY", "")  # Bing搜索API密钥
@@ -163,12 +170,6 @@ class Config:
     PORT = 8000
     LOG_LEVEL = "INFO"
     MAX_HISTORY_LENGTH = 10
-    
-    # HTTPS配置
-    ENABLE_HTTPS = False  # 是否启用HTTPS
-    HTTPS_PORT = 443  # HTTPS端口
-    SSL_CERT_FILE = "cert.pem"  # SSL证书文件路径
-    SSL_KEY_FILE = "key.pem"    # SSL密钥文件路径
     
     # 数字人配置
     AVATAR_NAME = "荧"

@@ -85,8 +85,8 @@ class CacheManager:
         
         try:
             if self.enabled:
-                # 30分钟过期时间
-                self.redis_client.setex(key, 1800, json.dumps(context, ensure_ascii=False))
+                # 1周过期时间（避免上下文频繁丢失）
+                self.redis_client.setex(key, 604800, json.dumps(context, ensure_ascii=False))
                 self.cache_stats['sets'] += 1
                 self.type_stats['session']['sets'] += 1
             else:

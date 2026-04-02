@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .login-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .login-input {
+            padding: 15px 20px;
+            width: 280px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .login-button {
+            padding: 15px 40px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .login-button:hover {
+            background-color: #2980b9;
+        }
+        .login-status {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+        .login-status.error {
+            color: #e74c3c;
+        }
+        .login-status.success {
+            color: #27ae60;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <div class="login-title">旅行者与派蒙</div>
+        <div class="login-subtitle">请输入访问口令</div>
+        <input type="password" class="login-input" id="passwordInput" placeholder="输入口令..." autocomplete="off">
+        <button class="login-button" id="loginButton">登录</button>
+        <div class="login-status" id="loginStatus"></div>
+    </div>
+
+    <script>
+        console.log('=== 页面加载完成 ===');
+        
+        const loginButton = document.getElementById('loginButton');
+        const passwordInput = document.getElementById('passwordInput');
+        const loginStatus = document.getElementById('loginStatus');
+        
+        console.log('loginButton:', loginButton);
+        console.log('passwordInput:', passwordInput);
+        console.log('loginStatus:', loginStatus);
+        
+        function handleLogin() {
+            console.log('=== 登录按钮被点击 ===');
+            const password = passwordInput.value.trim();
+            console.log('输入的密码:', password);
+            
+            if (!password) {
+                loginStatus.textContent = '请输入口令';
+                loginStatus.className = 'login-status error';
+                return;
+            }
+            
+            loginStatus.textContent = '登录中...';
+            loginStatus.className = 'login-status success';
+            
+            fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('登录响应:', data);
+                if (data.success) {
+                    loginStatus.textContent = '登录成功！';
+                    loginStatus.className = 'login-status success';
+                } else {
+                    loginStatus.textContent = data.error || '登录失败';
+                    loginStatus.className = 'login-status error';
+                }
+            })
+            .catch(error => {
+                console.error('登录失败:', error);
+                loginStatus.textContent = '网络错误';
+                loginStatus.className = 'login-status error';
+            });
+        }
+        
+        // 绑定按钮点击事件
+        if (loginButton) {
+            console.log('绑定登录按钮点击事件');
+            loginButton.addEventListener('click', handleLogin);
+            console.log('事件绑定完成');
+        } else {
+            console.error('登录按钮不存在');
+        }
+        
+        // 绑定回车事件
+        if (passwordInput) {
+            passwordInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    console.log('按下Enter键');
+                    handleLogin();
+                }
+            });
+        }
+    </script>
+</body>
+</html>

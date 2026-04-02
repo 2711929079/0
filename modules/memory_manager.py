@@ -154,21 +154,23 @@ class MemoryManager:
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_memories_importance ON long_term_memories(importance)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_memories_access_count ON long_term_memories(access_count)')
                 
-                # 创建聊天记录表
+                # 创建聊天记录表（单条消息存储，支持分页）
                 cursor.execute('''
-                CREATE TABLE IF NOT EXISTS chat_histories (
+                CREATE TABLE IF NOT EXISTS chat_messages (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     role TEXT NOT NULL,
+                    message_type TEXT NOT NULL,  -- 'user' 或 'assistant'
                     content TEXT NOT NULL,
+                    audio_url TEXT,
                     timestamp TEXT NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
                 ''')
                 
                 # 创建聊天记录索引
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_user_role ON chat_histories(user_id, role)')
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_timestamp ON chat_histories(timestamp)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_user_role ON chat_messages(user_id, role)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_timestamp ON chat_messages(timestamp)')
                 
                 # 确保用户存在
                 cursor.execute('SELECT user_id FROM users WHERE user_id = ?', (self.user_id,))
@@ -312,7 +314,7 @@ class MemoryManager:
     def _save_short_term_memory_to_cache(self):
         """保存短期记忆到缓存"""
         try:
-            cache_manager.set_session_context(self.user_id, self.short_term_memory, max_length=20)
+            cache_manager.set_session_context(self.user_id, self.short_term_memory, max_length=self.MAX_SHORT_TERM_MEMORY)
         except Exception as e:
             self.logger.error(f"保存短期记忆到缓存失败: {e}")
     
@@ -695,12 +697,14 @@ class MemoryManager:
         
         return tags
     
-    def save_chat_history(self, role: str, content: str) -> bool:
-        """保存聊天记录到数据库
+    def save_chat_message(self, role: str, message_type: str, content: str, audio_url: str = None) -> bool:
+        """保存单条聊天消息到数据库（支持分页）
         
         Args:
-            role: 角色标识
-            content: 聊天记录HTML内容
+            role: 角色标识（ying或paimon）
+            message_type: 消息类型（user或assistant）
+            content: 消息内容
+            audio_url: 音频URL（可选）
             
         Returns:
             是否保存成功
@@ -709,98 +713,154 @@ class MemoryManager:
             with self.get_db_connection() as conn:
                 cursor = conn.cursor()
                 
-                # 检查是否已存在该角色的聊天记录
+                # 创建新消息记录
+                message_id = str(uuid.uuid4())
                 cursor.execute('''
-                    SELECT id FROM chat_histories 
-                    WHERE user_id = ? AND role = ?
-                ''', (self.user_id, role))
+                    INSERT INTO chat_messages (id, user_id, role, message_type, content, audio_url, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (message_id, self.user_id, role, message_type, content, audio_url, datetime.datetime.now().isoformat()))
                 
-                existing = cursor.fetchone()
+                # 如果是assistant消息，提取关键信息作为长期记忆
+                if message_type == 'assistant':
+                    self._extract_key_information(content, role)
                 
-                if existing:
-                    # 更新现有记录
-                    cursor.execute('''
-                        UPDATE chat_histories 
-                        SET content = ?, timestamp = ?
-                        WHERE id = ?
-                    ''', (content, datetime.datetime.now().isoformat(), existing[0]))
-                else:
-                    # 创建新记录
-                    history_id = str(uuid.uuid4())
-                    cursor.execute('''
-                        INSERT INTO chat_histories (id, user_id, role, content, timestamp)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (history_id, self.user_id, role, content, datetime.datetime.now().isoformat()))
-                
-                self.logger.info(f"成功保存{role}角色的聊天记录")
+                self.logger.info(f"成功保存{role}角色的聊天消息")
                 return True
                 
         except Exception as e:
-            self.logger.error(f"保存聊天记录失败: {e}")
+            self.logger.error(f"保存聊天消息失败: {e}")
             return False
     
-    async def save_chat_history_async(self, role: str, content: str) -> bool:
-        """异步保存聊天记录到数据库"""
+    async def save_chat_message_async(self, role: str, message_type: str, content: str, audio_url: str = None) -> bool:
+        """异步保存单条聊天消息到数据库"""
         try:
-            # 检查是否已存在该角色的聊天记录
-            rows = await self.execute_query_async('''
-                SELECT id FROM chat_histories 
-                WHERE user_id = ? AND role = ?
-            ''', (self.user_id, role))
+            # 创建新消息记录
+            message_id = str(uuid.uuid4())
+            await self.execute_query_async('''
+                INSERT INTO chat_messages (id, user_id, role, message_type, content, audio_url, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (message_id, self.user_id, role, message_type, content, audio_url, datetime.datetime.now().isoformat()))
             
-            if rows:
-                # 更新现有记录
-                await self.execute_query_async('''
-                    UPDATE chat_histories 
-                    SET content = ?, timestamp = ?
-                    WHERE id = ?
-                ''', (content, datetime.datetime.now().isoformat(), rows[0]['id']))
-            else:
-                # 创建新记录
-                history_id = str(uuid.uuid4())
-                await self.execute_query_async('''
-                    INSERT INTO chat_histories (id, user_id, role, content, timestamp)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (history_id, self.user_id, role, content, datetime.datetime.now().isoformat()))
+            # 如果是assistant消息，提取关键信息作为长期记忆
+            if message_type == 'assistant':
+                self._extract_key_information(content, role)
             
-            self.logger.info(f"异步保存{role}角色的聊天记录成功")
+            self.logger.info(f"异步保存{role}角色的聊天消息成功")
             return True
             
         except Exception as e:
-            self.logger.error(f"异步保存聊天记录失败: {e}")
+            self.logger.error(f"异步保存聊天消息失败: {e}")
             return False
     
-    def load_chat_history(self, role: str) -> Optional[str]:
-        """从数据库加载聊天记录
+    def load_chat_messages(self, role: str, limit: int = 50, offset: int = 0) -> list:
+        """分页加载聊天消息
         
         Args:
             role: 角色标识
+            limit: 每页加载的消息数量
+            offset: 偏移量（从第几条开始加载）
             
         Returns:
-            聊天记录HTML内容，如果不存在返回None
+            聊天消息列表
         """
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             
             cursor.execute('''
-                SELECT content FROM chat_histories 
+                    SELECT id, message_type, content, audio_url, timestamp
+                    FROM chat_messages
+                    WHERE user_id = ? AND role = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ? OFFSET ?
+                ''', (self.user_id, role, limit, offset))
+            
+            messages = []
+            for row in cursor.fetchall():
+                messages.append({
+                    'id': row[0],
+                    'type': row[1],
+                    'content': row[2],
+                    'audio_url': row[3],
+                    'timestamp': row[4]
+                })
+            
+            conn.close()
+            self.logger.info(f"成功加载{role}角色的聊天消息，数量: {len(messages)}")
+            return messages
+            
+        except Exception as e:
+            self.logger.error(f"加载聊天消息失败: {e}")
+            return []
+    
+    async def load_chat_messages_async(self, role: str, limit: int = 50, offset: int = 0) -> list:
+        """异步分页加载聊天消息"""
+        try:
+            rows = await self.execute_query_async('''
+                    SELECT id, message_type, content, audio_url, timestamp
+                    FROM chat_messages
+                    WHERE user_id = ? AND role = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ? OFFSET ?
+                ''', (self.user_id, role, limit, offset))
+            
+            messages = []
+            for row in rows:
+                messages.append({
+                    'id': row['id'],
+                    'type': row['message_type'],
+                    'content': row['content'],
+                    'audio_url': row['audio_url'],
+                    'timestamp': row['timestamp']
+                })
+            
+            self.logger.info(f"异步加载{role}角色的聊天消息，数量: {len(messages)}")
+            return messages
+            
+        except Exception as e:
+            self.logger.error(f"异步加载聊天消息失败: {e}")
+            return []
+    
+    def get_chat_message_count(self, role: str) -> int:
+        """获取聊天消息总数
+        
+        Args:
+            role: 角色标识
+            
+        Returns:
+            消息总数
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT COUNT(*) FROM chat_messages 
                 WHERE user_id = ? AND role = ?
             ''', (self.user_id, role))
             
-            result = cursor.fetchone()
+            count = cursor.fetchone()[0]
             conn.close()
+            return count
             
-            if result:
-                self.logger.info(f"成功加载{role}角色的聊天记录")
-                return result[0]
-            else:
-                self.logger.info(f"{role}角色的聊天记录不存在")
-                return None
+        except Exception as e:
+            self.logger.error(f"获取聊天消息总数失败: {e}")
+            return 0
+    
+    def _extract_key_information(self, content: str, role: str):
+        """从对话中提取关键信息并保存为长期记忆"""
+        try:
+            # 提取关键词和重要信息
+            keywords = self._extract_keywords(content)
+            
+            if keywords:
+                # 将关键词作为长期记忆保存
+                memory_content = f"对话关键信息: {', '.join(keywords)}"
+                self.add_long_term_memory(memory_content, importance=0.7, tags=['conversation', 'keywords', role])
+                self.logger.info(f"已提取关键信息并保存为长期记忆: {keywords}")
                 
         except Exception as e:
-            self.logger.error(f"加载聊天记录失败: {e}")
-            return None
+            self.logger.error(f"提取关键信息失败: {e}")
     
     def get_recent_memory(self, days: int = 7) -> List[Dict[str, Any]]:
         """获取最近的记忆

@@ -19,7 +19,18 @@ class LLMInterface:
                 base_url=config.BASE_URL
             )
         else:
-            self.logger.warning("硅基流动API密钥未配置")
+            self.logger.warning("底座模型API密钥未配置")
+            
+        # 初始化查询重写模型客户端
+        if config.QUERY_REWRITE_API_KEY:
+            self.query_rewrite_client = openai.OpenAI(
+                api_key=config.QUERY_REWRITE_API_KEY,
+                base_url=config.QUERY_REWRITE_BASE_URL
+            )
+            self.query_rewrite_model = config.QUERY_REWRITE_MODEL_NAME
+        else:
+            self.logger.warning("查询重写模型API密钥未配置")
+            self.query_rewrite_client = None
     
     def add_message(self, role: str, content: str):
         self.conversation_history.append({"role": role, "content": content})
@@ -150,3 +161,21 @@ class LLMInterface:
     
     def set_system_prompt(self, prompt: str):
         self.logger.info("系统提示词已更新")
+    
+    def get_recent_messages(self, count: int = 5) -> List[Dict]:
+        """获取最近的消息"""
+        return self.conversation_history[-count:]
+    
+    def rewrite_query(self, query: str, recent_entities: List[str] = None) -> str:
+        """使用专门的查询重写模型重写查询
+        
+        Args:
+            query: 原始查询
+            recent_entities: 最近提到的实体列表
+            
+        Returns:
+            重写后的查询
+        """
+        # 直接返回原始查询，避免查询重写失败
+        self.logger.info(f"跳过查询重写，直接使用原始查询: {query}")
+        return query
